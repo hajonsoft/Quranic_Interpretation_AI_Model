@@ -1,8 +1,18 @@
-import React, { useState, useEffect } from 'react';
-import { TextField, Button, Container, Typography, Box, List, ListItem, ListItemText } from '@mui/material';
-import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, addDoc, query, orderBy, limit, getDocs } from 'firebase/firestore';
+import {
+  Box,
+  Button,
+  Container,
+  List,
+  ListItem,
+  ListItemText,
+  TextField,
+  Typography,
+} from "@mui/material";
+import { saveAs } from "file-saver";
 import { getAnalytics } from "firebase/analytics";
+import { initializeApp } from "firebase/app";
+import { addDoc, collection, getDocs, getFirestore } from "firebase/firestore";
+import React, { useEffect, useState } from "react";
 
 // Your web app's Firebase configuration
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
@@ -13,7 +23,7 @@ const firebaseConfig = {
   storageBucket: "training-data-collector.appspot.com",
   messagingSenderId: "92724339029",
   appId: "1:92724339029:web:b53d5c4fd3c3f31f104fdc",
-  measurementId: "G-146FQ3N9Y9"
+  measurementId: "G-146FQ3N9Y9",
 };
 
 // Initialize Firebase
@@ -22,47 +32,61 @@ getAnalytics(app);
 const db = getFirestore(app);
 
 function App() {
-  const [question, setQuestion] = useState('');
-  const [wrongResponse, setWrongResponse] = useState('');
-  const [correctResponse, setCorrectResponse] = useState('');
-  const [lastEntries, setLastEntries] = useState([]);
+  const [question, setQuestion] = useState("");
+  const [wrongResponse, setWrongResponse] = useState("");
+  const [correctResponse, setCorrectResponse] = useState("");
+  const [entries, setEntries] = useState([]);
 
-  // Fetch last 5 entries from Firestore
-  const fetchLastEntries = async () => {
-    const q = query(collection(db, 'responses'), orderBy('timestamp', 'desc'), limit(5));
-    const querySnapshot = await getDocs(q);
-    const entries = querySnapshot.docs.map(doc => doc.data());
-    setLastEntries(entries);
-  };
-
-  // Add a new entry to Firestore
-  const handleSubmit = async () => {
-    if (question && wrongResponse && correctResponse) {
-      try {
-        await addDoc(collection(db, 'responses'), {
-          question,
-          wrongResponse,
-          correctResponse,
-          timestamp: new Date()
-        });
-        setQuestion('');
-        setWrongResponse('');
-        setCorrectResponse('');
-        fetchLastEntries();  // Refresh the list after submission
-      } catch (error) {
-        console.error('Error adding document: ', error);
-      }
-    }
-  };
-
+  // Fetch last 5 entries from Firebase
   useEffect(() => {
-    fetchLastEntries();  // Fetch the last entries on component mount
+    const fetchEntries = async () => {
+      const querySnapshot = await getDocs(collection(db, "responses"));
+      const docs = querySnapshot.docs.map((doc) => doc.data());
+      setEntries(docs.slice(-5)); // Show only the last 5 entries
+    };
+
+    fetchEntries();
   }, []);
+
+  // Function to handle form submission
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!question || !wrongResponse || !correctResponse) {
+      alert("Please fill in all fields");
+      return;
+    }
+
+    // Save data to Firebase
+    await addDoc(collection(db, "responses"), {
+      question,
+      wrong_response: wrongResponse,
+      correct_response: correctResponse,
+    });
+
+    // Clear form fields
+    setQuestion("");
+    setWrongResponse("");
+    setCorrectResponse("");
+
+    // Fetch latest entries
+    const querySnapshot = await getDocs(collection(db, "responses"));
+    const docs = querySnapshot.docs.map((doc) => doc.data());
+    setEntries(docs.slice(-5)); // Update displayed entries
+  };
+
+  // Function to export entries as JSON file
+  const exportAsJson = () => {
+    const jsonData = JSON.stringify(entries, null, 2); // Convert entries to JSON string
+    const blob = new Blob([jsonData], { type: "application/json" });
+    saveAs(blob, "training_data.json"); // Download JSON file
+  };
 
   return (
     <Container>
-      <Typography variant="h4" gutterBottom>Training Data Collector</Typography>
-      
+      <Typography variant="h4" gutterBottom>
+        Training Data Collector
+      </Typography>
+
       <Box mb={3}>
         <TextField
           label="Question"
@@ -101,10 +125,19 @@ function App() {
           Submit
         </Button>
       </Box>
-
-      <Typography variant="h5" gutterBottom>Last 5 Entries</Typography>
+      <Button
+        onClick={exportAsJson}
+        variant="contained"
+        color="secondary"
+        sx={{ marginTop: 2 }}
+      >
+        Export as JSON
+      </Button>
+      <Typography variant="h5" gutterBottom>
+        Last 5 Entries
+      </Typography>
       <List>
-        {lastEntries.map((entry, index) => (
+        {entries.map((entry, index) => (
           <ListItem key={index}>
             <ListItemText
               primary={`Q: ${entry.question}`}
